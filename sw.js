@@ -19,7 +19,8 @@ self.addEventListener('push', (e) => {
         renotify: true,
         icon: 'pwa/icon-192.png',
         badge: 'pwa/icon-192.png',
-        data: { game: data.game || null },
+        // game: a live game to open; review: a game just analysed, opened at the move `ply`.
+        data: { game: data.game || null, review: data.review || null, ply: Number.isInteger(data.ply) ? data.ply : null },
       })
     }),
   )
@@ -27,13 +28,17 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close()
-  const game = e.notification.data && e.notification.data.game
-  const url = new URL(game ? `./?game=${game}` : './', self.registration.scope).href
+  const d = e.notification.data || {}
+  const game = d.game
+  const review = d.review
+  const path = review ? `./?review=${encodeURIComponent(review)}${d.ply !== null && d.ply !== undefined ? `&ply=${d.ply}` : ''}` : game ? `./?game=${game}` : './'
+  const url = new URL(path, self.registration.scope).href
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const open = list.find((c) => c.url.startsWith(self.registration.scope))
       if (open) {
-        if (game) open.postMessage({ type: 'open-game', id: game })
+        if (review) open.postMessage({ type: 'open-review', id: review, ply: d.ply })
+        else if (game) open.postMessage({ type: 'open-game', id: game })
         return open.focus()
       }
       return self.clients.openWindow(url)
